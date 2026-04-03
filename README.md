@@ -203,7 +203,7 @@ python inference.py
 Deployed via Hugging Face Spaces:
 
 ```bash
-openenv push --repo-id <your-username>/emailtriageenv
+openenv push --repo-id surajmp05/emailtriageenv
 ```
 
 ---
