@@ -7,7 +7,7 @@ from openenv.core.client_types import StepResult
 from openenv.core.env_server.types import State
 
 
-from models import EmailItem, EmailTriageAction, EmailTriageObservation
+from .models import EmailItem, EmailTriageAction, EmailTriageObservation
 
 class EmailTriageEnvClient(EnvClient[EmailTriageAction, EmailTriageObservation, State]):
     """Client for the EmailTriageEnv environment."""

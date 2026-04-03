@@ -1,55 +1,51 @@
-# 📧 EmailTriageEnv — Intelligent Email Triage & Action Environment
+---
+
+title: EmailTriageEnv
+emoji: 📧
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+---
+
+# 📧 EmailTriageEnv — AI-Powered Email Decision Environment
 
 ## 🚀 Overview
 
-EmailTriageEnv is a **real-world OpenEnv environment** that simulates enterprise email triage workflows used in:
+**EmailTriageEnv** is a production-grade OpenEnv environment that simulates **real-world enterprise email workflows** such as:
 
-* Customer support systems
-* Corporate inbox management
+* Customer support triage systems
 * SLA-driven escalation pipelines
+* Corporate inbox management
 
-The environment evaluates an AI agent’s ability to:
+It evaluates how well AI agents can:
 
-* Classify emails (spam / urgent / normal)
-* Assign priorities (1–3)
-* Choose appropriate actions (reply / ignore / escalate / schedule)
+* 📩 Understand email context
+* ⚡ Prioritize tasks intelligently
+* 🧠 Make correct operational decisions under constraints
 
-This goes beyond simple classification by modeling **multi-step decision-making under constraints**, closely reflecting real operational systems.
-
----
-
-## 🎯 Motivation
-
-Modern organizations receive high volumes of emails requiring:
-
-* Rapid prioritization
-* Correct escalation decisions
-* Deadline awareness (SLA compliance)
-
-This environment enables benchmarking of agents on **realistic productivity tasks**, rather than synthetic or game-based scenarios.
+> 🔥 Built for **real-world productivity AI**, not toy problems.
 
 ---
 
-## 🧠 Environment Design
+## 🎯 Why This Matters
 
-### 🔹 Observation Space
+Modern organizations handle:
 
-Each observation contains:
+* Thousands of emails daily
+* Strict SLA deadlines ⏱️
+* VIP stakeholders 👑
+* Critical production incidents 🚨
 
-* List of emails with:
+👉 A wrong decision can cause **real business impact**
 
-  * `id`, `sender`, `subject`, `body`
-  * `is_vip`, `timestamp`, optional `deadline`
-* `pending_email_ids`
-* `processed_email_ids`
-* `per_email_scores`
-* metadata (task, difficulty, progress)
+This environment benchmarks whether AI can **think and act like a human operator**.
 
 ---
 
-### 🔹 Action Space
+## 🧠 What the Agent Must Do
 
-Agent must output:
+For each email, the agent outputs:
 
 ```json
 {
@@ -60,49 +56,69 @@ Agent must output:
 }
 ```
 
----
+### ✅ Constraints
 
-### 🔹 Environment API
-
-Implements full OpenEnv spec:
-
-* `reset()` → initial observation
-* `step(action)` → observation, reward, done, info
-* `state()` → current state
+* Priority must be strictly: **1 (low), 2 (medium), 3 (high)**
+* Invalid actions or duplicate handling are penalized
 
 ---
 
-## 🧩 Tasks
+## 🏗️ Environment Design
+
+### 📥 Observation Space
+
+* Email list:
+
+  * sender, subject, body
+  * VIP flag 👑
+  * timestamps & deadlines ⏳
+* `pending_email_ids`
+* `processed_email_ids`
+* `per_email_scores`
+* Metadata & progress
+
+---
+
+### ⚙️ Action Space
+
+* Multi-step decision making
+* Context-aware actions
+* SLA-sensitive prioritization
+
+---
+
+### 🔁 API
+
+* `reset()` → returns initial observation
+* `step(action)` → returns observation, reward, done, info
+* `state()` → returns current state
+
+---
+
+## 🧩 Task Levels
 
 ### 🟢 Easy
 
-* Single email classification
-* Basic decision making
-
----
+* Single email
+* Basic classification
 
 ### 🟡 Medium
 
 * Multiple emails
 * Mixed priorities
-* Requires correct sequencing
-
----
 
 ### 🔴 Hard (Enterprise Scenario)
 
-* Multiple VIP stakeholders (CEO, CTO, HR)
-* Conflicting deadlines (ASAP, EOD, fixed time)
-* Production-critical incidents
-* Ambiguous priority decisions
+* CEO / CTO / HR stakeholders 👑
+* Conflicting deadlines (ASAP vs EOD)
+* Production incidents 🚨
+* Ambiguous decision-making
 
-👉 Designed to challenge **state-of-the-art agents**
+> 💡 Designed to challenge **advanced AI agents**
 
 ---
 
-## 🎯 Grading System
-
-Each decision is evaluated using a deterministic grader:
+## 📊 Scoring System
 
 | Component      | Weight |
 | -------------- | ------ |
@@ -110,61 +126,41 @@ Each decision is evaluated using a deterministic grader:
 | Priority       | 0.3    |
 | Action         | 0.3    |
 
-Score range:
-
-```text
-0.0 → 1.0
-```
+Score Range: **0.0 → 1.0**
 
 ---
 
-## 💰 Reward Function
+## 🎯 Reward Design
 
-Provides **dense, meaningful feedback**:
+✔ Correct decisions → positive reward
+✔ Partial correctness → proportional reward
+❌ Mistakes → penalties
 
-✔ Positive reward for correct decisions
-✔ Partial credit for partially correct outputs
-✔ Penalties for:
+Penalizes:
 
-* Incorrect VIP handling
-* Missing deadlines (SLA violations)
-* Duplicate or invalid actions
+* ❌ Incorrect VIP handling
+* ❌ Missed deadlines (SLA violations)
+* ❌ Duplicate or invalid actions
 
-✔ Efficiency bonus for completing tasks optimally
-
----
-
-## ⚙️ Key Features
-
-* ✅ Real-world task simulation (enterprise email workflows)
-* ✅ Deterministic scoring (reproducible results)
-* ✅ Multi-step decision environment
-* ✅ SLA-aware reward shaping
-* ✅ VIP priority modeling
-* ✅ Fully containerized deployment
+🎁 Efficiency bonus for optimal decisions
 
 ---
 
-## 🤖 Baseline Inference
+## ✨ Key Features
 
-The provided `inference.py`:
-
-* Uses OpenAI-compatible client
-* Produces **structured logs**:
-
-```text
-[START]
-[STEP]
-[END]
-```
-
-* Ensures **reproducible performance** across runs
+* 🏢 Real enterprise workflow simulation
+* 🎯 Deterministic scoring
+* 🔄 Multi-step reasoning
+* ⏱️ SLA-aware decisions
+* 👑 VIP prioritization
+* 🐳 Docker-ready deployment
+* ☁️ Hugging Face Space deployment
 
 ---
 
-## 🐳 Setup & Usage
+## ⚡ Quick Start
 
-### 🔹 Install dependencies
+### Install
 
 ```bash
 pip install openenv-core huggingface_hub openai
@@ -172,7 +168,7 @@ pip install openenv-core huggingface_hub openai
 
 ---
 
-### 🔹 Run locally
+### Run Locally
 
 ```bash
 openenv validate
@@ -181,53 +177,89 @@ uv run server
 
 ---
 
-### 🔹 Build Docker
+### Docker (HF Compatible)
 
 ```bash
 docker build -t emailtriageenv:latest .
-docker run -p 8000:8000 emailtriageenv:latest
+docker run -p 7860:7860 emailtriageenv:latest
 ```
 
 ---
 
-### 🔹 Run inference
+### Inference
 
 ```bash
-python inference.py
+python -m my_env.inference
 ```
 
 ---
 
-## 🚀 Deployment
-
-Deployed via Hugging Face Spaces:
+## 🌐 Deployment
 
 ```bash
 openenv push --repo-id surajmp05/emailtriageenv
 ```
 
----
-
-## 📊 Baseline Results
-
-* Easy: near-perfect performance
-* Medium: moderate complexity
-* Hard: requires nuanced decision-making
-
-👉 Designed to expose gaps in agent reasoning and prioritization
+Live Space:
+👉 https://surajmp05-emailtriageenv.hf.space
 
 ---
 
-## 🏁 Conclusion
+## 📈 Example Inference Output
 
-EmailTriageEnv provides a **high-fidelity, real-world benchmark** for evaluating AI agents in productivity workflows.
-
-It emphasizes:
-
-* Decision quality
-* Priority management
-* Real-world constraints
-
-making it a valuable tool for **agent evaluation and training**.
+```text
+[START] task=email-triage env=EmailTriageEnv model=gpt-4o-mini
+[STEP] step=1 action={'classification': 'spam', 'priority': 1, 'action': 'ignore'} reward=0.50 done=false error=null
+[STEP] step=2 action={'classification': 'urgent', 'priority': 3, 'action': 'reply'} reward=1.00 done=true error=null
+[END] success=true steps=2 rewards=0.50,1.00
+```
 
 ---
+
+## 📈 Baseline Performance
+
+* 🟢 Easy → Near perfect
+* 🟡 Medium → Moderate
+* 🔴 Hard → Requires reasoning
+
+👉 Exposes gaps in agent decision-making
+
+---
+
+## 🏆 Why This Project Stands Out
+
+* Not just classification → **decision intelligence**
+* Real-world constraints → **SLA + VIP handling**
+* Multi-step reasoning → **agent evaluation benchmark**
+* Enforces strict action validity and priority constraints
+
+---
+
+## 🔮 Future Improvements
+
+* 📊 Decision monitoring dashboard
+* 🧠 Memory-enabled agents
+* 🤖 Multi-agent collaboration
+* 📡 Real email integrations
+
+---
+
+## 🤝 Contributing
+
+Pull requests welcome!
+Let’s build the future of **AI productivity systems** 🚀
+
+---
+
+## 📜 License
+
+MIT License
+
+---
+
+## 💡 Final Thought
+
+> The future of AI is not just answering questions —
+> it’s making the **right decisions at the right time**.
+
+**EmailTriageEnv is a step toward that future.**

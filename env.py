@@ -109,17 +109,16 @@ class EmailTriageEnvironment(Environment):
 
         reward = details["reward"]
 
-        # 🔥 VIP penalty
+
         email_data = self._emails[action.email_id]
         if email_data.get("is_vip") and score < 0.5:
             reward -= 0.3
 
-        # 🔥 SLA / deadline penalty
         if email_data.get("deadline"):
             if action.classification != "urgent" and action.action != "escalate":
                 reward -= 0.2
 
-        # 🔥 Efficiency bonus
+
         if len(self._processed) + 1 == len(self._emails):
             if self._state.step_count <= len(self._emails):
                 reward += 0.1
