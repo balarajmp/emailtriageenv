@@ -1,0 +1,51 @@
+{
+  "task_id": "email-triage-medium",
+  "difficulty": "medium",
+  "description": "Mixed inbox with normal, urgent, and spam.",
+  "emails": [
+    {
+      "id": "e-101",
+      "sender": "manager@company.com",
+      "subject": "Need deck updates by 4 PM",
+      "body": "Please send me the revised slides before 4 PM today.",
+      "is_vip": false,
+      "timestamp": "2026-04-03T07:30:00Z"
+    },
+    {
+      "id": "e-102",
+      "sender": "news@industrydigest.com",
+      "subject": "Weekly AI newsletter",
+      "body": "Your regular weekly briefing is attached.",
+      "is_vip": false,
+      "timestamp": "2026-04-03T06:45:00Z"
+    },
+    {
+      "id": "e-103",
+      "sender": "security-alert@random-domain.xyz",
+      "subject": "Confirm password immediately",
+      "body": "Urgent account lock warning. Verify password on this page.",
+      "is_vip": false,
+      "timestamp": "2026-04-03T05:00:00Z"
+    }
+  ],
+  "labels": [
+    {
+      "email_id": "e-101",
+      "classification": "urgent",
+      "priority": 3,
+      "action": "reply"
+    },
+    {
+      "email_id": "e-102",
+      "classification": "normal",
+      "priority": 1,
+      "action": "schedule"
+    },
+    {
+      "email_id": "e-103",
+      "classification": "spam",
+      "priority": 1,
+      "action": "ignore"
+    }
+  ]
+}

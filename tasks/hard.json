@@ -1,0 +1,97 @@
+{
+  "task_id": "email-triage-hard",
+  "difficulty": "hard",
+  "description": "Complex enterprise email triage with multiple VIPs, conflicting deadlines, and ambiguous priorities requiring careful decision-making.",
+  "emails": [
+    {
+      "id": "e-201",
+      "sender": "ceo@company.com",
+      "subject": "Client escalation before 11 AM",
+      "body": "Join me with a root-cause summary before the 11 AM call.",
+      "is_vip": true,
+      "deadline": "11:00",
+      "timestamp": "2026-04-03T04:10:00Z"
+    },
+    {
+      "id": "e-202",
+      "sender": "finance@company.com",
+      "subject": "Invoice discrepancy - action needed today",
+      "body": "Please confirm why invoice #7781 is 12% over budget before EOD.",
+      "is_vip": false,
+      "deadline": "EOD",
+      "timestamp": "2026-04-03T03:55:00Z"
+    },
+    {
+      "id": "e-203",
+      "sender": "events@community.org",
+      "subject": "Invitation: Tech meetup next month",
+      "body": "Would love to see you speak if your schedule permits.",
+      "is_vip": false,
+      "timestamp": "2026-04-03T02:30:00Z"
+    },
+    {
+      "id": "e-204",
+      "sender": "hr-director@company.com",
+      "subject": "Policy sign-off deadline 2 PM",
+      "body": "Need your approval on the updated leave policy by 2 PM.",
+      "is_vip": true,
+      "deadline": "14:00",
+      "timestamp": "2026-04-03T01:40:00Z"
+    },
+    {
+      "id": "e-205",
+      "sender": "bonus-prize@winfast.cash",
+      "subject": "Immediate payout if you verify account",
+      "body": "Complete KYC with card details to release your payout instantly.",
+      "is_vip": false,
+      "timestamp": "2026-04-03T00:50:00Z"
+    },
+    {
+      "id": "e-206",
+      "sender": "cto@company.com",
+      "subject": "Production bug affecting payments",
+      "body": "Customers unable to complete checkout. Need immediate attention.",
+      "is_vip": true,
+      "deadline": "ASAP",
+      "timestamp": "2026-04-03T04:20:00Z"
+    }
+  ],
+  "labels": [
+    {
+      "email_id": "e-201",
+      "classification": "urgent",
+      "priority": 3,
+      "action": "escalate"
+    },
+    {
+      "email_id": "e-202",
+      "classification": "urgent",
+      "priority": 2,
+      "action": "reply"
+    },
+    {
+      "email_id": "e-203",
+      "classification": "normal",
+      "priority": 1,
+      "action": "schedule"
+    },
+    {
+      "email_id": "e-204",
+      "classification": "urgent",
+      "priority": 3,
+      "action": "reply"
+    },
+    {
+      "email_id": "e-205",
+      "classification": "spam",
+      "priority": 1,
+      "action": "ignore"
+    },
+    {
+      "email_id": "e-206",
+      "classification": "urgent",
+      "priority": 3,
+      "action": "escalate"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "task_id": "email-triage-easy",
+  "difficulty": "easy",
+  "description": "Single obvious spam email.",
+  "emails": [
+    {
+      "id": "e-001",
+      "sender": "promo@flashdeals-now.biz",
+      "subject": "You won a free iPhone - claim in 10 minutes",
+      "body": "Click this unknown link now to claim your reward.",
+      "is_vip": false,
+      "timestamp": "2026-04-02T09:15:00Z"
+    }
+  ],
+  "labels": [
+    {
+      "email_id": "e-001",
+      "classification": "spam",
+      "priority": 1,
+      "action": "ignore"
+    }
+  ]
+}
