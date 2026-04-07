@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 from openai import OpenAI
 
-# ✅ Support BOTH execution modes (script + package)
+# ✅ Support BOTH execution modes
 try:
     from .client import EmailTriageEnvClient
     from .models import EmailTriageAction
@@ -18,20 +18,17 @@ except ImportError:
 
 
 MAX_STEPS = 6
-TEMPERATURE = 0.0
-MAX_TOKENS = 100
 SUCCESS_SCORE_THRESHOLD = 0.7
 
 
 def _fallback_policy(email: Dict[str, Any]) -> Dict[str, Any]:
-    """Rule-based safe fallback policy"""
     text = f"{email.get('subject', '')} {email.get('body', '')}".lower()
     is_vip = bool(email.get("is_vip", False))
 
-    if any(word in text for word in ["free", "verify", "won", "payout", "click"]):
+    if any(word in text for word in ["free", "verify", "won", "payout", "click", "lottery", "offer"]):
         return {"classification": "spam", "priority": 1, "action": "ignore"}
 
-    if is_vip or any(word in text for word in ["urgent", "deadline", "today", "asap", "eod"]):
+    if is_vip or any(word in text for word in ["urgent", "deadline", "today", "asap", "eod", "important"]):
         return {
             "classification": "urgent",
             "priority": 3,
@@ -45,41 +42,63 @@ def _extract_json(text: str) -> Dict[str, Any]:
     text = text.strip()
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
+    except Exception:
         start = text.find("{")
         end = text.rfind("}")
-        if start != -1 and end != -1 and end > start:
+        if start != -1 and end != -1:
             return json.loads(text[start:end + 1])
-    raise ValueError("Model response did not contain valid JSON")
+    raise ValueError("Invalid JSON from LLM")
+
+
+async def call_llm(llm_client: OpenAI, email: Dict[str, Any]) -> Dict[str, Any] | None:
+    try:
+        prompt = f"""
+Classify this email strictly into JSON:
+
+Options:
+- classification: spam / urgent / normal
+- priority: 1 (low), 2 (medium), 3 (high)
+- action: ignore / reply / escalate / schedule
+
+Email:
+Subject: {email.get('subject', '')}
+Body: {email.get('body', '')}
+
+Return ONLY JSON.
+"""
+
+        response = llm_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=100,
+        )
+
+        content = response.choices[0].message.content
+        return _extract_json(content)
+
+    except Exception as e:
+        print(f"[WARN] LLM failed: {e}")
+        return None
 
 
 async def main() -> None:
     try:
-        api_base_url = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-        model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
-        hf_token = os.getenv("HF_TOKEN", "")
+        # ✅ MUST use injected variables (CRITICAL)
+        api_base_url = os.environ["API_BASE_URL"]
+        api_key = os.environ["API_KEY"]
+
         env_url = os.getenv("ENV_URL", "https://surajmp05-emailtriageenv.hf.space")
 
-        print(f"[START] task=email-triage env=EmailTriageEnv model={model_name}")
+        print("[START] task=email-triage env=EmailTriageEnv")
 
-        # ✅ Safe LLM init
-        try:
-            llm_client = OpenAI(base_url=api_base_url, api_key=hf_token or "no-token")
-        except Exception as e:
-            print(f"[ERROR] LLM init failed: {e}")
-            return
-
-        # ✅ Safe Env init
-        try:
-            env_client = EmailTriageEnvClient(base_url=env_url)
-        except Exception as e:
-            print(f"[ERROR] Env client init failed: {e}")
-            return
+        llm_client = OpenAI(base_url=api_base_url, api_key=api_key)
+        env_client = EmailTriageEnvClient(base_url=env_url)
 
         rewards: List[float] = []
 
         try:
-            # 🔥 RETRY LOGIC FOR RESET
+            # 🔥 RETRY RESET
             for attempt in range(3):
                 try:
                     reset_result = await env_client.reset()
@@ -89,7 +108,7 @@ async def main() -> None:
                     print(f"[WARN] reset attempt {attempt+1} failed: {e}")
                     await asyncio.sleep(2)
             else:
-                print("[ERROR] reset failed after retries")
+                print("[ERROR] reset failed")
                 return
 
             step_count = 0
@@ -97,7 +116,6 @@ async def main() -> None:
             while getattr(obs, "pending_email_ids", []) and step_count < MAX_STEPS:
                 try:
                     email_id = obs.pending_email_ids[0]
-
                     email = next(
                         item.model_dump()
                         for item in obs.emails
@@ -107,18 +125,24 @@ async def main() -> None:
                     print(f"[ERROR] email extraction failed: {e}")
                     break
 
-                decision = _fallback_policy(email)
-                decision["priority"] = max(1, min(3, decision["priority"]))
+                # 🔥 USE LLM (MANDATORY FOR PHASE 2)
+                decision = await call_llm(llm_client, email)
 
-                # 🔥 RETRY LOGIC FOR STEP
+                # fallback safety
+                if not decision:
+                    decision = _fallback_policy(email)
+
+                decision["priority"] = max(1, min(3, decision.get("priority", 2)))
+
+                # 🔥 RETRY STEP
                 for attempt in range(3):
                     try:
                         result = await env_client.step(
                             EmailTriageAction(
                                 email_id=email_id,
-                                classification=decision["classification"],
+                                classification=decision.get("classification", "normal"),
                                 priority=decision["priority"],
-                                action=decision["action"],
+                                action=decision.get("action", "schedule"),
                             )
                         )
                         break
@@ -126,7 +150,7 @@ async def main() -> None:
                         print(f"[WARN] step attempt {attempt+1} failed: {e}")
                         await asyncio.sleep(2)
                 else:
-                    print("[ERROR] step failed after retries")
+                    print("[ERROR] step failed")
                     break
 
                 obs = result.observation
@@ -144,9 +168,7 @@ async def main() -> None:
             success = sum(rewards) >= SUCCESS_SCORE_THRESHOLD
             reward_str = ",".join(f"{r:.2f}" for r in rewards)
 
-            print(
-                f"[END] success={str(success).lower()} steps={step_count} rewards={reward_str}"
-            )
+            print(f"[END] success={str(success).lower()} steps={step_count} rewards={reward_str}")
 
         finally:
             try:
