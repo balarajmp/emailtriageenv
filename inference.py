@@ -18,7 +18,7 @@ except ImportError:
 
 
 MAX_STEPS = 6
-MIN_STEPS_REQUIRED = 3
+MIN_EPISODES = 3
 SUCCESS_SCORE_THRESHOLD = 0.7
 
 
@@ -86,16 +86,13 @@ Return ONLY JSON.
 def normalize_score(raw_reward: float | None) -> float:
     if raw_reward is None:
         return 0.5
-
-    # Convert to (0,1)
     score = 1 / (1 + abs(raw_reward))
-
-    # Clamp strictly inside (0,1)
     return max(0.01, min(0.99, score))
 
 
 async def main() -> None:
     try:
+        # ✅ REQUIRED for LiteLLM proxy
         api_base_url = os.environ["API_BASE_URL"]
         api_key = os.environ["API_KEY"]
 
@@ -109,86 +106,91 @@ async def main() -> None:
         rewards: List[float] = []
 
         try:
-            # 🔥 RETRY RESET
-            for attempt in range(3):
-                try:
-                    reset_result = await env_client.reset()
-                    obs = reset_result.observation
-                    break
-                except Exception as e:
-                    print(f"[WARN] reset attempt {attempt+1} failed: {e}")
-                    await asyncio.sleep(2)
-            else:
-                print("[ERROR] reset failed")
-                return
+            episode_count = 0
 
-            step_count = 0
+            # 🔥 MULTI-EPISODE LOOP (KEY FIX)
+            while episode_count < MIN_EPISODES:
 
-            while step_count < MAX_STEPS:
-                if not getattr(obs, "pending_email_ids", []):
-                    break
-
-                try:
-                    email_id = obs.pending_email_ids[0]
-                    email = next(
-                        item.model_dump()
-                        for item in obs.emails
-                        if item.id == email_id
-                    )
-                except Exception as e:
-                    print(f"[ERROR] email extraction failed: {e}")
-                    break
-
-                # 🔥 LLM + fallback
-                decision = await call_llm(llm_client, email)
-                if not decision:
-                    decision = _fallback_policy(email)
-
-                decision["priority"] = max(1, min(3, decision.get("priority", 2)))
-
-                # 🔥 RETRY STEP
+                # 🔁 RESET ENV
                 for attempt in range(3):
                     try:
-                        result = await env_client.step(
-                            EmailTriageAction(
-                                email_id=email_id,
-                                classification=decision.get("classification", "normal"),
-                                priority=decision["priority"],
-                                action=decision.get("action", "schedule"),
-                            )
-                        )
+                        reset_result = await env_client.reset()
+                        obs = reset_result.observation
                         break
                     except Exception as e:
-                        print(f"[WARN] step attempt {attempt+1} failed: {e}")
+                        print(f"[WARN] reset attempt {attempt+1} failed: {e}")
                         await asyncio.sleep(2)
                 else:
-                    print("[ERROR] step failed")
-                    break
+                    print("[ERROR] reset failed")
+                    return
 
-                obs = result.observation
-                step_count += 1
+                step_count = 0
 
-                # 🔥 NORMALIZED SCORE
-                score = normalize_score(result.reward)
-                rewards.append(score)
+                while getattr(obs, "pending_email_ids", []) and step_count < MAX_STEPS:
+                    try:
+                        email_id = obs.pending_email_ids[0]
+                        email = next(
+                            item.model_dump()
+                            for item in obs.emails
+                            if item.id == email_id
+                        )
+                    except Exception as e:
+                        print(f"[ERROR] email extraction failed: {e}")
+                        break
 
-                print(
-                    f"[STEP] step={step_count} action={decision} "
-                    f"raw_reward={result.reward} score={score:.2f} done={str(result.done).lower()}"
-                )
+                    # 🔥 LLM + fallback
+                    decision = await call_llm(llm_client, email)
+                    if not decision:
+                        decision = _fallback_policy(email)
 
-                # ❌ DO NOT BREAK ON DONE (ensures ≥3 tasks)
+                    decision["priority"] = max(1, min(3, decision.get("priority", 2)))
 
-            # 🔥 ENSURE MINIMUM TASKS
-            if step_count < MIN_STEPS_REQUIRED:
-                print("[WARN] Not enough steps, padding scores")
-                while len(rewards) < MIN_STEPS_REQUIRED:
-                    rewards.append(0.5)
+                    # 🔁 RETRY STEP
+                    for attempt in range(3):
+                        try:
+                            result = await env_client.step(
+                                EmailTriageAction(
+                                    email_id=email_id,
+                                    classification=decision.get("classification", "normal"),
+                                    priority=decision["priority"],
+                                    action=decision.get("action", "schedule"),
+                                )
+                            )
+                            break
+                        except Exception as e:
+                            print(f"[WARN] step attempt {attempt+1} failed: {e}")
+                            await asyncio.sleep(2)
+                    else:
+                        print("[ERROR] step failed")
+                        break
 
-            success = sum(rewards) / len(rewards) >= SUCCESS_SCORE_THRESHOLD
+                    obs = result.observation
+                    step_count += 1
+
+                    # 🔥 NORMALIZED SCORE
+                    score = normalize_score(result.reward)
+                    rewards.append(score)
+
+                    print(
+                        f"[STEP] episode={episode_count+1} step={step_count} "
+                        f"raw_reward={result.reward} score={score:.2f}"
+                    )
+
+                    if result.done:
+                        break
+
+                episode_count += 1
+
+            # 🔥 FINAL RESULT
+            avg_score = sum(rewards) / len(rewards) if rewards else 0
+            success = avg_score >= SUCCESS_SCORE_THRESHOLD
+
             reward_str = ",".join(f"{r:.2f}" for r in rewards)
 
-            print(f"[END] success={str(success).lower()} steps={step_count} rewards={reward_str}")
+            print(
+                f"[END] success={str(success).lower()} "
+                f"episodes={episode_count} rewards={reward_str}"
+            )
 
         finally:
             try:
