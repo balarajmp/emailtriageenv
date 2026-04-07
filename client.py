@@ -6,8 +6,12 @@ from openenv.core import EnvClient
 from openenv.core.client_types import StepResult
 from openenv.core.env_server.types import State
 
+# ✅ FIX: support both script + package execution
+try:
+    from .models import EmailItem, EmailTriageAction, EmailTriageObservation
+except ImportError:
+    from models import EmailItem, EmailTriageAction, EmailTriageObservation
 
-from .models import EmailItem, EmailTriageAction, EmailTriageObservation
 
 class EmailTriageEnvClient(EnvClient[EmailTriageAction, EmailTriageObservation, State]):
     """Client for the EmailTriageEnv environment."""
@@ -17,6 +21,7 @@ class EmailTriageEnvClient(EnvClient[EmailTriageAction, EmailTriageObservation, 
 
     def _parse_result(self, payload: Dict) -> StepResult[EmailTriageObservation]:
         obs_data = payload.get("observation", {})
+
         observation = EmailTriageObservation(
             emails=[EmailItem(**email) for email in obs_data.get("emails", [])],
             processed_email_ids=obs_data.get("processed_email_ids", []),

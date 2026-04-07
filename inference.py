@@ -3,12 +3,18 @@ from __future__ import annotations
 import json
 import os
 import asyncio
+import sys
 from typing import Any, Dict, List
 
 from openai import OpenAI
 
-from .client import EmailTriageEnvClient
-from .models import EmailTriageAction
+# ✅ Support BOTH execution modes (script + package)
+try:
+    from .client import EmailTriageEnvClient
+    from .models import EmailTriageAction
+except ImportError:
+    from client import EmailTriageEnvClient
+    from models import EmailTriageAction
 
 
 MAX_STEPS = 6
@@ -18,6 +24,7 @@ SUCCESS_SCORE_THRESHOLD = 0.7
 
 
 def _fallback_policy(email: Dict[str, Any]) -> Dict[str, Any]:
+    """Rule-based safe fallback policy"""
     text = f"{email.get('subject', '')} {email.get('body', '')}".lower()
     is_vip = bool(email.get("is_vip", False))
 
@@ -47,64 +54,110 @@ def _extract_json(text: str) -> Dict[str, Any]:
 
 
 async def main() -> None:
-    api_base_url = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-    model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
-    hf_token = os.getenv("HF_TOKEN", "")
-
-    # Using deployed HF Space instead of Docker
-    env_url = os.getenv("ENV_URL", "https://surajmp05-emailtriageenv.hf.space")
-
-    print(f"[START] task=email-triage env=EmailTriageEnv model={model_name}")
-
-    llm_client = OpenAI(base_url=api_base_url, api_key=hf_token or "no-token")
-    env_client = EmailTriageEnvClient(base_url=env_url)
-
-    rewards: List[float] = []
-
     try:
-        reset_result = await env_client.reset()
-        obs = reset_result.observation
+        api_base_url = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+        model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
+        hf_token = os.getenv("HF_TOKEN", "")
+        env_url = os.getenv("ENV_URL", "https://surajmp05-emailtriageenv.hf.space")
 
-        step_count = 0
+        print(f"[START] task=email-triage env=EmailTriageEnv model={model_name}")
 
-        while obs.pending_email_ids and step_count < MAX_STEPS:
-            email_id = obs.pending_email_ids[0]
-            email = next(item.model_dump() for item in obs.emails if item.id == email_id)
+        # ✅ Safe LLM init
+        try:
+            llm_client = OpenAI(base_url=api_base_url, api_key=hf_token or "no-token")
+        except Exception as e:
+            print(f"[ERROR] LLM init failed: {e}")
+            return
 
-            decision = _fallback_policy(email)
+        # ✅ Safe Env init
+        try:
+            env_client = EmailTriageEnvClient(base_url=env_url)
+        except Exception as e:
+            print(f"[ERROR] Env client init failed: {e}")
+            return
 
-            # enforce priority bounds (1–3)
-            decision["priority"] = max(1, min(3, decision["priority"]))
+        rewards: List[float] = []
 
-            result = await env_client.step(
-                EmailTriageAction(
-                    email_id=email_id,
-                    classification=decision["classification"],
-                    priority=decision["priority"],
-                    action=decision["action"],
+        try:
+            # 🔥 RETRY LOGIC FOR RESET
+            for attempt in range(3):
+                try:
+                    reset_result = await env_client.reset()
+                    obs = reset_result.observation
+                    break
+                except Exception as e:
+                    print(f"[WARN] reset attempt {attempt+1} failed: {e}")
+                    await asyncio.sleep(2)
+            else:
+                print("[ERROR] reset failed after retries")
+                return
+
+            step_count = 0
+
+            while getattr(obs, "pending_email_ids", []) and step_count < MAX_STEPS:
+                try:
+                    email_id = obs.pending_email_ids[0]
+
+                    email = next(
+                        item.model_dump()
+                        for item in obs.emails
+                        if item.id == email_id
+                    )
+                except Exception as e:
+                    print(f"[ERROR] email extraction failed: {e}")
+                    break
+
+                decision = _fallback_policy(email)
+                decision["priority"] = max(1, min(3, decision["priority"]))
+
+                # 🔥 RETRY LOGIC FOR STEP
+                for attempt in range(3):
+                    try:
+                        result = await env_client.step(
+                            EmailTriageAction(
+                                email_id=email_id,
+                                classification=decision["classification"],
+                                priority=decision["priority"],
+                                action=decision["action"],
+                            )
+                        )
+                        break
+                    except Exception as e:
+                        print(f"[WARN] step attempt {attempt+1} failed: {e}")
+                        await asyncio.sleep(2)
+                else:
+                    print("[ERROR] step failed after retries")
+                    break
+
+                obs = result.observation
+                step_count += 1
+                rewards.append(result.reward)
+
+                print(
+                    f"[STEP] step={step_count} action={decision} "
+                    f"reward={result.reward:.2f} done={str(result.done).lower()} error=null"
                 )
-            )
 
-            obs = result.observation
-            step_count += 1
-            rewards.append(result.reward)
+                if result.done:
+                    break
+
+            success = sum(rewards) >= SUCCESS_SCORE_THRESHOLD
+            reward_str = ",".join(f"{r:.2f}" for r in rewards)
 
             print(
-                f"[STEP] step={step_count} action={decision} reward={result.reward:.2f} done={str(result.done).lower()} error=null"
+                f"[END] success={str(success).lower()} steps={step_count} rewards={reward_str}"
             )
 
-            if result.done:
-                break
+        finally:
+            try:
+                await env_client.close()
+            except Exception:
+                pass
 
-        success = sum(rewards) >= SUCCESS_SCORE_THRESHOLD
-        reward_str = ",".join(f"{r:.2f}" for r in rewards)
+    except Exception as e:
+        print(f"[FATAL ERROR] {e}")
 
-        print(
-            f"[END] success={str(success).lower()} steps={step_count} rewards={reward_str}"
-        )
-
-    finally:
-        await env_client.close()
+    sys.exit(0)
 
 
 if __name__ == "__main__":
